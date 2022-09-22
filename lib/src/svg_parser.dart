@@ -49,6 +49,7 @@ import 'dart:collection';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:jovial_svg/log_function.dart';
 import 'package:xml/xml_events.dart';
 import 'affine.dart';
 import 'common_noui.dart';
@@ -92,6 +93,8 @@ abstract class SvgParser extends GenericParser {
 
   void _startTag(XmlStartElementEvent evt) {
     final String evtName = evt.localName;
+
+    logColor('start of tag: $evtName', 'green');
     _tagStack.add(_TagEntry(_parentStack.length, evtName));
     try {
       _currTag = evtName;
@@ -130,6 +133,11 @@ abstract class SvgParser extends GenericParser {
         _processImage(_toMap(evt.attributes));
       } else if (evtName == 'text') {
         _currentText = _processText(_toMap(evt.attributes));
+        if (evt.isSelfClosing) {
+          _currentText = null;
+        }
+      } else if (evtName == 'textPath') {
+        _currentText = _processTextPath(_toMap(evt.attributes));
         if (evt.isSelfClosing) {
           _currentText = null;
         }
@@ -176,12 +184,15 @@ abstract class SvgParser extends GenericParser {
   }
 
   void _textEvent(XmlTextEvent e) {
+    logColor('text: ${e.text}', 'magenta');
     _currentText?.appendText(e.text);
     _currentStyle?.write(e.text);
   }
 
   void _endTag(XmlEndElementEvent evt) {
     final evtName = evt.localName;
+
+    logColor('end of tag: $evtName', 'red');
     bool found = false;
     for (int i = _tagStack.length - 1; i >= 0; i--) {
       final tse = _tagStack[i];
@@ -198,6 +209,8 @@ abstract class SvgParser extends GenericParser {
       return;
     }
     if (evtName == 'text') {
+      _currentText = null;
+    } else if (evtName == 'textPath') {
       _currentText = null;
     } else if (evtName == 'style' && _currentStyle != null) {
       _processStyle(_currentStyle!.toString());
@@ -449,6 +462,8 @@ abstract class SvgParser extends GenericParser {
   }
 
   SvgText _processText(Map<String, String> attrs) {
+    logColor('text attrs: $attrs', 'cyan');
+    logColor('idlookup: ${svg.idLookup}', 'magenta');
     final n = SvgText(warn);
     n.x = getFloatList(attrs.remove('x')) ?? n.x;
     n.y = getFloatList(attrs.remove('y')) ?? n.y;
@@ -456,6 +471,8 @@ abstract class SvgParser extends GenericParser {
     _processInheritable(n, attrs);
     _warnUnusedAttributes(attrs);
     _parentStack.last.children.add(n);
+    // logColor('_parentStack: $_parentStack', 'cyan');
+    // logColor('children: ${_parentStack.last.children}', 'cyan');
     return n;
   }
 
@@ -466,6 +483,16 @@ abstract class SvgParser extends GenericParser {
     span.y = getFloatList(attrs.remove('y'));
     _processInheritableText(span, attrs);
     _warnUnusedAttributes(attrs);
+  }
+
+  SvgText _processTextPath(Map<String, String> attrs) {
+    logColor('textPath attrs: $attrs', 'cyan');
+
+    final href = _getHref(attrs);
+    logColor('textPath href: $href', 'cyan');
+
+    final n = SvgText(warn);
+    return n;
   }
 
   SvgCoordinate? _getCoordinate(String? attr) {
@@ -1065,6 +1092,7 @@ class StringSvgParser extends SvgParser {
   void parse() {
     final handler = _SvgParserEventHandler(this);
     for (XmlEvent e in parseEvents(_input)) {
+      logColor('XmlEvent: $e', 'white');
       e.accept(handler);
     }
     buildResult();
